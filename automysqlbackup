@@ -83,6 +83,7 @@ load_default_config() {
   CONFIG_mysql_dump_full_schema='yes'
   CONFIG_mysql_dump_dbstatus='yes'
   CONFIG_mysql_dump_differential='no'
+  CONFIG_mysql_dump_per_table='no'
   CONFIG_backup_local_files=()
   CONFIG_db_names=()
   CONFIG_db_month_names=()
@@ -611,9 +612,9 @@ process_dbs() {
   local rotation_string="$7"
   local multipledbs="$8"
   shift 8
-
   local name
   local subsubfolder
+  local db
 
   # only activate differential backup for daily backups
   [[ "x$subfolder" != "xdaily" ]] && activate_differential_backup=0 || activate_differential_backup=1
@@ -622,10 +623,13 @@ process_dbs() {
 	# multiple dbs
 	subsubfolder=""
 	name="all-databases"
+	db="all-databases"
   else
 	# single db
 	subsubfolder="/$1"
 	name="$@"
+        name=${name// /_}
+	db="$1"
   fi
 
   [[ -d "${CONFIG_backup_dir}/${subfolder}${subsubfolder}" ]] || {
@@ -641,13 +645,6 @@ process_dbs() {
 
   (( $CONFIG_debug )) && echo "DEBUG: process_dbs >> Setting manifest file to: ${manifest_file}" 
 
-  if (( $multipledbs )); then
-	# multiple databases
-	db="all-databases"
-  else
-	# single db
-	db="$1"
-  fi
 
   if [[ "x$CONFIG_mysql_dump_differential" = "xyes" ]] && [[ "x${CONFIG_encrypt}" != "xyes" ]] && (( $activate_differential_backup )); then
 
@@ -1888,9 +1885,22 @@ method_backup () {
 		  if [[ "${CONFIG_mysql_dump_use_separate_dirs}" = "yes" ]]; then
 			for db in "${CONFIG_db_month_names[@]}"; do
 			  echo "Monthly Backup of Database ( ${db} )"
-			  (shopt -s nullglob dotglob; f=("${CONFIG_backup_dir}/${subfolder}/${db}/${prefix}${db}_${date_stamp}_"[0-9][0-9]"h"[0-9][0-9]"m${midfix}${extension}${suffix}"); ((${#f[@]}))) && continue
-			  process_dbs "$subfolder" "$prefix" "$midfix" "$extension" "$rotation" "$rotation_divisor" "$rotation_string" 0 "$db"
-			  echo ----------------------------------------------------------------------
+			  echo "CONFIG_mysql_dump_per_table: ${CONFIG_mysql_dump_per_table}"
+			  if [[ "${CONFIG_mysql_dump_per_table}" = "yes" ]]; then
+			    echo "Save tables per file ..."
+                            TABLES=( `mysql -h ${CONFIG_mysql_dump_host} -u ${CONFIG_mysql_dump_username} -p${CONFIG_mysql_dump_password} -BNsre "SHOW TABLES;" ${db}` )
+			    for element in $(seq 0 $((${#TABLES[@]} - 1 )))
+			    do
+                              echo "Table: $db.${TABLES[$element]}"
+                              #(shopt -s nullglob dotglob; f=("${CONFIG_backup_dir}/${subfolder}/${db}/${prefix}${db_table}_${date_stamp}_"[0-9][0-9]"h"[0-9][0-9]"m${midfix}${extension}${suffix}"); ((${#f[@]}))) && continue
+                              process_dbs "$subfolder" "$prefix" "$midfix" "$extension" "$rotation" "$rotation_divisor" "$rotation_string" 0 "$db" ${TABLES[$element]}
+                            done
+                          else
+			    (shopt -s nullglob dotglob; f=("${CONFIG_backup_dir}/${subfolder}/${db}/${prefix}${db}_${date_stamp}_"[0-9][0-9]"h"[0-9][0-9]"m${midfix}${extension}${suffix}"); ((${#f[@]}))) && continue
+			    process_dbs "$subfolder" "$prefix" "$midfix" "$extension" "$rotation" "$rotation_divisor" "$rotation_string" 0 "${db}"
+			    echo ----------------------------------------------------------------------
+			  fi
+			  
 			done
 		  else
 			  echo "Monthly backup of databases ( ${CONFIG_db_month_names[@]} )."
