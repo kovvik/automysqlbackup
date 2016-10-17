@@ -1886,8 +1886,9 @@ method_backup () {
 			for db in "${CONFIG_db_month_names[@]}"; do
 			  echo "Monthly Backup of Database ( ${db} )"
 			  echo "CONFIG_mysql_dump_per_table: ${CONFIG_mysql_dump_per_table}"
+			  # Save table per file if CONFIG_mysql_dump_host is set
 			  if [[ "${CONFIG_mysql_dump_per_table}" = "yes" ]]; then
-			    echo "Save tables per file ..."
+			    echo "Save table per file ..."
                             TABLES=( `mysql -h ${CONFIG_mysql_dump_host} -u ${CONFIG_mysql_dump_username} -p${CONFIG_mysql_dump_password} -BNsre "SHOW TABLES;" ${db}` )
 			    for element in $(seq 0 $((${#TABLES[@]} - 1 )))
 			    do
@@ -1926,8 +1927,20 @@ method_backup () {
 		  if [[ "${CONFIG_mysql_dump_use_separate_dirs}" = "yes" ]]; then
 			for db in "${CONFIG_db_names[@]}"; do
 			  echo "Weekly Backup of Database ( ${db} )"
-			  (shopt -s nullglob dotglob; f=("${CONFIG_backup_dir}/${subfolder}/${db}/${prefix}${db}_${date_stamp}_"[0-9][0-9]"h"[0-9][0-9]"m${midfix}${extension}${suffix}"); ((${#f[@]}))) && continue
-			  process_dbs "$subfolder" "$prefix" "$midfix" "$extension" "$rotation" "$rotation_divisor" "$rotation_string" 0 "$db"
+			  # Save table per file if CONFIG_mysql_dump_host is set
+			  if [[ "${CONFIG_mysql_dump_per_table}" = "yes" ]]; then
+			    echo "Save table per file ..."
+                            TABLES=( `mysql -h ${CONFIG_mysql_dump_host} -u ${CONFIG_mysql_dump_username} -p${CONFIG_mysql_dump_password} -BNsre "SHOW TABLES;" ${db}` )
+			    for element in $(seq 0 $((${#TABLES[@]} - 1 )))
+			    do
+                              echo "Table: $db.${TABLES[$element]}"
+                              #(shopt -s nullglob dotglob; f=("${CONFIG_backup_dir}/${subfolder}/${db}/${prefix}${db_table}_${date_stamp}_"[0-9][0-9]"h"[0-9][0-9]"m${midfix}${extension}${suffix}"); ((${#f[@]}))) && continue
+                              process_dbs "$subfolder" "$prefix" "$midfix" "$extension" "$rotation" "$rotation_divisor" "$rotation_string" 0 "$db" ${TABLES[$element]}
+                            done
+                          else
+			    (shopt -s nullglob dotglob; f=("${CONFIG_backup_dir}/${subfolder}/${db}/${prefix}${db}_${date_stamp}_"[0-9][0-9]"h"[0-9][0-9]"m${midfix}${extension}${suffix}"); ((${#f[@]}))) && continue
+			    process_dbs "$subfolder" "$prefix" "$midfix" "$extension" "$rotation" "$rotation_divisor" "$rotation_string" 0 "$db"
+			  fi
 			  echo "----------------------------------------------------------------------"
 			done
 		  else
@@ -1955,7 +1968,19 @@ method_backup () {
 		  if [[ "${CONFIG_mysql_dump_use_separate_dirs}" = "yes" ]]; then
 			for db in "${CONFIG_db_names[@]}"; do
 			  echo "Daily Backup of Database ( ${db} )"
-			  process_dbs "$subfolder" "$prefix" "$midfix" "$extension" "$rotation" "$rotation_divisor" "$rotation_string" 0 "$db"
+			  # Save table per file if CONFIG_mysql_dump_host is set
+			  if [[ "${CONFIG_mysql_dump_per_table}" = "yes" ]]; then
+			    echo "Save table per file ..."
+                            TABLES=( `mysql -h ${CONFIG_mysql_dump_host} -u ${CONFIG_mysql_dump_username} -p${CONFIG_mysql_dump_password} -BNsre "SHOW TABLES;" ${db}` )
+			    for element in $(seq 0 $((${#TABLES[@]} - 1 )))
+			    do
+                              echo "Table: $db.${TABLES[$element]}"
+                              #(shopt -s nullglob dotglob; f=("${CONFIG_backup_dir}/${subfolder}/${db}/${prefix}${db_table}_${date_stamp}_"[0-9][0-9]"h"[0-9][0-9]"m${midfix}${extension}${suffix}"); ((${#f[@]}))) && continue
+                              process_dbs "$subfolder" "$prefix" "$midfix" "$extension" "$rotation" "$rotation_divisor" "$rotation_string" 0 "$db" ${TABLES[$element]}
+                            done
+                          else
+			    process_dbs "$subfolder" "$prefix" "$midfix" "$extension" "$rotation" "$rotation_divisor" "$rotation_string" 0 "$db"
+                          fi
 			  echo "----------------------------------------------------------------------"
 			done
 		  else
